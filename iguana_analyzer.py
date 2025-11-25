@@ -32,11 +32,11 @@ class IguanaRegisterAnalyzer:
 
     def extract_packets(self):
         """从PCAP文件中提取长度为738字节的数据包"""
-        print(f"正在读取PCAP文件: {self.pcap_file}")
+        print(f"Reading PCAP file: {self.pcap_file}")
         try:
             packets = rdpcap(self.pcap_file)
         except Exception as e:
-            print(f"错误: 无法读取PCAP文件 - {e}")
+            print(f"Error: Unable to read PCAP file - {e}")
             sys.exit(1)
 
         # 筛选长度为738的数据包
@@ -49,7 +49,7 @@ class IguanaRegisterAnalyzer:
                 self.packets_data.append(iguana_data)
                 filtered_count += 1
 
-        print(f"找到 {filtered_count} 个738字节数据包，提取了{filtered_count}组寄存器数据\n")
+        print(f"Found {filtered_count} packets of 738 bytes, extracted {filtered_count} register data sets\n")
         return filtered_count
 
     def reverse_bytes(self, data):
@@ -101,7 +101,7 @@ class IguanaRegisterAnalyzer:
     def compare_and_report(self):
         """比较所有数据包中相同芯片相同寄存器的值，并生成报告"""
         print("=" * 80)
-        print("寄存器值分析报告")
+        print("Register Value Analysis Report")
         print("=" * 80)
 
         all_identical = True
@@ -124,7 +124,7 @@ class IguanaRegisterAnalyzer:
                     # 发现不一致
                     all_identical = False
                     inconsistent_regs.append((chip_id, reg_id))
-                    print(f"CHIP{chip_id:2d} Reg{reg_id}  ✗  不一致！")
+                    print(f"CHIP{chip_id:2d} Reg{reg_id}  ✗  Inconsistent!")
 
                     # 统计每个值出现的次数
                     value_counts = {}
@@ -138,15 +138,15 @@ class IguanaRegisterAnalyzer:
 
                     for idx, (val, count) in enumerate(sorted_values, 1):
                         packet_indices = [i+1 for i, v in enumerate(values) if v == val]
-                        print(f"            值{idx} ({count}次): "
+                        print(f"            Value{idx} ({count}x): "
                               f"0x{int(val, 2):08X}  {val}  "
-                              f"数据包{packet_indices}")
+                              f"Packets{packet_indices}")
 
         print("=" * 80)
         if all_identical:
-            print("✓ 所有寄存器值一致")
+            print("✓ All register values are consistent")
         else:
-            print(f"✗ 发现 {len(inconsistent_regs)} 个寄存器不一致")
+            print(f"✗ Found {len(inconsistent_regs)} inconsistent registers")
         print("=" * 80)
 
         return all_identical
@@ -157,11 +157,11 @@ class IguanaRegisterAnalyzer:
         count = self.extract_packets()
 
         if count == 0:
-            print(f"未找到长度为 {self.TARGET_PACKET_LENGTH} 字节的数据包")
+            print(f"No packets of {self.TARGET_PACKET_LENGTH} bytes found")
             return
 
         # 解析寄存器数据
-        print("正在解析寄存器数据...\n")
+        print("Parsing register data...\n")
         self.parse_register_data()
 
         # 对比并生成报告
@@ -171,13 +171,13 @@ class IguanaRegisterAnalyzer:
 def main():
     """主函数"""
     print("=" * 80)
-    print("Iguana芯片寄存器数据分析工具")
+    print("Iguana Chip Register Data Analysis Tool")
     print("=" * 80)
 
     # 检查命令行参数
     if len(sys.argv) < 2:
-        print("\n使用方法: python iguana_analyzer.py <PCAP文件路径>")
-        print("\n示例:")
+        print("\nUsage: python iguana_analyzer.py <PCAP_file_path>")
+        print("\nExamples:")
         print("  python iguana_analyzer.py test_tool.pcap")
         print("  python iguana_analyzer.py C:\\Users\\FuYou\\Desktop\\data.pcap")
         sys.exit(1)
