@@ -107,6 +107,9 @@ class IguanaRegisterAnalyzer:
         all_identical = True
         inconsistent_regs = []
 
+        # 存储每个寄存器在所有芯片中的值（用于跨芯片对比）
+        register_across_chips = {}
+
         for chip_id in range(self.NUM_CHIPS):
             for reg_id in range(self.REGISTERS_PER_CHIP):
                 key = (chip_id, reg_id)
@@ -117,9 +120,15 @@ class IguanaRegisterAnalyzer:
 
                 if len(unique_values) == 1:
                     # 所有值相同
+                    value = unique_values[0]
                     print(f"CHIP{chip_id:2d} Reg{reg_id}  ✓  "
-                          f"0x{int(unique_values[0], 2):08X}  "
-                          f"{unique_values[0]}")
+                          f"0x{int(value, 2):08X}  "
+                          f"{value}")
+
+                    # 存储该寄存器的值用于跨芯片对比
+                    if reg_id not in register_across_chips:
+                        register_across_chips[reg_id] = []
+                    register_across_chips[reg_id].append((chip_id, value))
                 else:
                     # 发现不一致
                     all_identical = False
@@ -144,12 +153,62 @@ class IguanaRegisterAnalyzer:
 
         print("=" * 80)
         if all_identical:
-            print("✓ All register values are consistent")
+            print("✓ All register values are consistent across packets")
         else:
-            print(f"✗ Found {len(inconsistent_regs)} inconsistent registers")
+            print(f"✗ Found {len(inconsistent_regs)} inconsistent registers across packets")
         print("=" * 80)
 
+        # 跨芯片对比
+        self.compare_across_chips(register_across_chips)
+
         return all_identical
+
+    def compare_across_chips(self, register_across_chips):
+        """对比不同芯片的相同寄存器值"""
+        print("\n" + "=" * 80)
+        print("Cross-Chip Register Comparison")
+        print("=" * 80)
+
+        cross_chip_inconsistent = False
+
+        for reg_id in range(self.REGISTERS_PER_CHIP):
+            if reg_id not in register_across_chips:
+                continue
+
+            chip_values = register_across_chips[reg_id]
+
+            # 获取所有不同的值
+            unique_values = {}
+            for chip_id, value in chip_values:
+                if value not in unique_values:
+                    unique_values[value] = []
+                unique_values[value].append(chip_id)
+
+            if len(unique_values) == 1:
+                # 所有芯片的该寄存器值相同
+                value = list(unique_values.keys())[0]
+                print(f"\nReg{reg_id}  ✓  All chips consistent")
+                print(f"  Value: 0x{int(value, 2):08X}  {value}")
+            else:
+                # 发现不同芯片的该寄存器值不一致
+                cross_chip_inconsistent = True
+                print(f"\nReg{reg_id}  ✗  Inconsistent across chips!")
+
+                # 按芯片数量排序
+                sorted_values = sorted(unique_values.items(),
+                                     key=lambda x: len(x[1]),
+                                     reverse=True)
+
+                for idx, (value, chips) in enumerate(sorted_values, 1):
+                    print(f"  Value{idx} (CHIP {len(chips)}x): 0x{int(value, 2):08X}  {value}")
+                    print(f"    Chips: {chips}")
+
+        print("=" * 80)
+        if cross_chip_inconsistent:
+            print("✗ Found inconsistencies across chips")
+        else:
+            print("✓ All registers are consistent across all chips")
+        print("=" * 80)
 
     def run_analysis(self):
         """运行完整的分析流程"""
