@@ -321,7 +321,7 @@ class IguanaRegisterAnalyzer:
         ws.title = "Register Analysis"
 
         # 设置表头
-        headers = ["ChipID", "RegID", "Value (Hex)", "Value (Binary)"]
+        headers = ["ChipID", "RegID", "Value (Hex)"]  # , "Value (Binary)"]  # 注释掉Binary列
         ws.append(headers)
 
         # 设置表头样式
@@ -343,13 +343,13 @@ class IguanaRegisterAnalyzer:
                     binary_value = values[0]
                     hex_value = f"0x{int(binary_value, 2):08X}"
 
-                    ws.append([chip_id, reg_id, hex_value, binary_value])
+                    ws.append([chip_id, reg_id, hex_value])  # , binary_value])  # 注释掉Binary列
 
         # 调整列宽
         ws.column_dimensions['A'].width = 12
         ws.column_dimensions['B'].width = 10
         ws.column_dimensions['C'].width = 15
-        ws.column_dimensions['D'].width = 40
+        # ws.column_dimensions['D'].width = 40  # Binary列已注释
 
         # 保存文件
         wb.save(output_file)
@@ -388,8 +388,8 @@ class IguanaRegisterAnalyzer:
 
         # 设置表头，使用实际的文件名
         headers = ["ChipID", "RegID",
-                   f"{file1_name} (Hex)", f"{file1_name} (Binary)",
-                   f"{file2_name} (Hex)", f"{file2_name} (Binary)",
+                   f"{file1_name} (Hex)",  # f"{file1_name} (Binary)",  # 注释掉Binary列
+                   f"{file2_name} (Hex)",  # f"{file2_name} (Binary)",  # 注释掉Binary列
                    "Status"]
         ws.append(headers)
 
@@ -419,7 +419,7 @@ class IguanaRegisterAnalyzer:
                     # 判断是否相同
                     status = "Identical" if binary_value1 == binary_value2 else "Different"
 
-                    row = [chip_id, reg_id, hex_value1, binary_value1, hex_value2, binary_value2, status]
+                    row = [chip_id, reg_id, hex_value1, hex_value2, status]  # binary_value1, binary_value2]  # 注释掉Binary列
                     ws.append(row)
 
                     # 如果不同，高亮显示该行
@@ -433,10 +433,10 @@ class IguanaRegisterAnalyzer:
         ws.column_dimensions['A'].width = 12
         ws.column_dimensions['B'].width = 10
         ws.column_dimensions['C'].width = 18
-        ws.column_dimensions['D'].width = 40
-        ws.column_dimensions['E'].width = 18
-        ws.column_dimensions['F'].width = 40
-        ws.column_dimensions['G'].width = 12
+        # ws.column_dimensions['D'].width = 40  # Binary列已注释
+        ws.column_dimensions['D'].width = 18  # File2 Hex (原来是E列)
+        # ws.column_dimensions['F'].width = 40  # Binary列已注释
+        ws.column_dimensions['E'].width = 12  # Status (原来是G列)
 
         # 保存文件
         wb.save(output_file)
