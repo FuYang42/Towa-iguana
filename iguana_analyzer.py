@@ -22,16 +22,18 @@ class IguanaRegisterAnalyzer:
     TOTAL_DATA_SIZE = NUM_CHIPS * BYTES_PER_CHIP  # 192字节
     TARGET_PACKET_LENGTH = 738
 
-    def __init__(self, pcap_file1, pcap_file2=None):
+    def __init__(self, pcap_file1, pcap_file2=None, pcap_file3=None):
         """
         初始化分析器
 
         Args:
             pcap_file1: 第一个PCAP文件路径
             pcap_file2: 第二个PCAP文件路径（可选，用于对比）
+            pcap_file3: 第三个PCAP文件路径（可选，用于三文件对比）
         """
         self.pcap_file1 = pcap_file1
         self.pcap_file2 = pcap_file2
+        self.pcap_file3 = pcap_file3
         self.pcap_file = pcap_file1  # 保持向后兼容
 
         # 第一个文件的数据
@@ -41,6 +43,10 @@ class IguanaRegisterAnalyzer:
         # 第二个文件的数据
         self.packets_data2 = []
         self.register_values2 = defaultdict(list)
+
+        # 第三个文件的数据
+        self.packets_data3 = []
+        self.register_values3 = defaultdict(list)
 
     def extract_packets(self, file_path=None, packets_data_list=None):
         """从PCAP文件中提取长度为738字节的数据包"""
@@ -314,6 +320,94 @@ class IguanaRegisterAnalyzer:
 
         print("=" * 80)
 
+    def compare_three_files(self):
+        """对比三个PCAP文件的寄存器数据并生成对比报告"""
+        print("\n" + "=" * 80)
+        print("REGISTER VALUE COMPARISON BETWEEN THREE FILES")
+        print("=" * 80)
+
+        # 统计信息
+        all_identical = 0
+        partial_identical = 0  # 部分相同
+        all_different = 0
+
+        # 对比每个芯片的每个寄存器
+        for chip_id in range(self.NUM_CHIPS):
+            chip_has_diff = False
+            chip_diff_details = []
+
+            for reg_id in range(self.REGISTERS_PER_CHIP):
+                key = (chip_id, reg_id)
+
+                # 获取三个文件中该寄存器的值
+                values1 = self.register_values.get(key, [])
+                values2 = self.register_values2.get(key, [])
+                values3 = self.register_values3.get(key, [])
+
+                if not values1 or not values2 or not values3:
+                    continue
+
+                # 获取第一个值（代表性值）
+                value1 = values1[0]
+                value2 = values2[0]
+                value3 = values3[0]
+
+                # 判断三个值的关系
+                if value1 == value2 == value3:
+                    all_identical += 1
+                else:
+                    chip_has_diff = True
+                    if value1 == value2 or value1 == value3 or value2 == value3:
+                        partial_identical += 1
+                        status = "Partial Match"
+                    else:
+                        all_different += 1
+                        status = "All Different"
+
+                    chip_diff_details.append({
+                        'reg_id': reg_id,
+                        'value1': value1,
+                        'value2': value2,
+                        'value3': value3,
+                        'status': status
+                    })
+
+            # 输出该芯片的对比结果
+            if chip_has_diff:
+                print(f"\nCHIP{chip_id:2d}  ✗  Differences found:")
+                for detail in chip_diff_details:
+                    reg_id = detail['reg_id']
+                    value1 = detail['value1']
+                    value2 = detail['value2']
+                    value3 = detail['value3']
+                    status = detail['status']
+
+                    print(f"  Reg{reg_id} ({status}):")
+                    print(f"    File1: 0x{int(value1, 2):08X}")
+                    print(f"    File2: 0x{int(value2, 2):08X}")
+                    print(f"    File3: 0x{int(value3, 2):08X}")
+            else:
+                print(f"\nCHIP{chip_id:2d}  ✓  All registers identical across all files")
+
+        # 汇总统计
+        print("\n" + "=" * 80)
+        print("COMPARISON SUMMARY")
+        print("=" * 80)
+        total_registers = self.NUM_CHIPS * self.REGISTERS_PER_CHIP
+        print(f"Total registers compared: {total_registers}")
+        print(f"All identical: {all_identical}")
+        print(f"Partially identical: {partial_identical}")
+        print(f"All different: {all_different}")
+
+        if all_identical == total_registers:
+            print("\n✓ All register values are IDENTICAL in all three files!")
+        else:
+            diff_total = partial_identical + all_different
+            percentage = (diff_total / total_registers) * 100
+            print(f"\n✗ Found differences in {percentage:.1f}% of registers")
+
+        print("=" * 80)
+
     def export_to_excel_single(self, output_file):
         """导出单文件分析结果到Excel"""
         wb = Workbook()
@@ -442,6 +536,85 @@ class IguanaRegisterAnalyzer:
         wb.save(output_file)
         print(f"\n✓ Excel comparison file saved: {output_file}")
 
+    def export_to_excel_three_way_comparison(self, output_file):
+        """导出三文件对比结果到Excel"""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Three-Way Comparison"
+
+        # 获取文件名（不含扩展名）
+        file1_name = os.path.splitext(os.path.basename(self.pcap_file1))[0]
+        file2_name = os.path.splitext(os.path.basename(self.pcap_file2))[0]
+        file3_name = os.path.splitext(os.path.basename(self.pcap_file3))[0]
+
+        # 设置表头，使用实际的文件名
+        headers = ["ChipID", "RegID",
+                   f"{file1_name} (Hex)",
+                   f"{file2_name} (Hex)",
+                   f"{file3_name} (Hex)",
+                   "Status"]
+        ws.append(headers)
+
+        # 设置表头样式
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_font = Font(bold=True, color="FFFFFF")
+        for cell in ws[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        # 写入数据
+        for chip_id in range(self.NUM_CHIPS):
+            for reg_id in range(self.REGISTERS_PER_CHIP):
+                key = (chip_id, reg_id)
+
+                # 获取三个文件中该寄存器的值
+                values1 = self.register_values.get(key, [])
+                values2 = self.register_values2.get(key, [])
+                values3 = self.register_values3.get(key, [])
+
+                if values1 and values2 and values3:
+                    binary_value1 = values1[0]
+                    binary_value2 = values2[0]
+                    binary_value3 = values3[0]
+                    hex_value1 = f"0x{int(binary_value1, 2):08X}"
+                    hex_value2 = f"0x{int(binary_value2, 2):08X}"
+                    hex_value3 = f"0x{int(binary_value3, 2):08X}"
+
+                    # 判断是否相同
+                    if binary_value1 == binary_value2 == binary_value3:
+                        status = "All Identical"
+                    elif binary_value1 == binary_value2:
+                        status = "File1=File2"
+                    elif binary_value1 == binary_value3:
+                        status = "File1=File3"
+                    elif binary_value2 == binary_value3:
+                        status = "File2=File3"
+                    else:
+                        status = "All Different"
+
+                    row = [chip_id, reg_id, hex_value1, hex_value2, hex_value3, status]
+                    ws.append(row)
+
+                    # 如果不是全部相同，高亮显示该行
+                    if status != "All Identical":
+                        row_num = ws.max_row
+                        diff_fill = PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid")
+                        for cell in ws[row_num]:
+                            cell.fill = diff_fill
+
+        # 调整列宽
+        ws.column_dimensions['A'].width = 12
+        ws.column_dimensions['B'].width = 10
+        ws.column_dimensions['C'].width = 18  # File1 Hex
+        ws.column_dimensions['D'].width = 18  # File2 Hex
+        ws.column_dimensions['E'].width = 18  # File3 Hex
+        ws.column_dimensions['F'].width = 15  # Status
+
+        # 保存文件
+        wb.save(output_file)
+        print(f"\n✓ Excel three-way comparison file saved: {output_file}")
+
     def run_comparison(self):
         """运行双文件对比分析流程"""
         print("\n" + "=" * 80)
@@ -476,6 +649,49 @@ class IguanaRegisterAnalyzer:
         excel_file = f"{base_name1}_vs_{base_name2}_comparison.xlsx"
         self.export_to_excel_comparison(excel_file)
 
+    def run_three_way_comparison(self):
+        """运行三文件对比分析流程"""
+        print("\n" + "=" * 80)
+        print("THREE-WAY FILE COMPARISON MODE")
+        print("=" * 80)
+
+        # 提取第一个文件的数据包
+        print(f"\n[FILE 1: {self.pcap_file1}]")
+        count1 = self.extract_packets(self.pcap_file1, self.packets_data)
+        if count1 == 0:
+            print(f"No packets of {self.TARGET_PACKET_LENGTH} bytes found in file 1")
+            return
+
+        # 提取第二个文件的数据包
+        print(f"\n[FILE 2: {self.pcap_file2}]")
+        count2 = self.extract_packets(self.pcap_file2, self.packets_data2)
+        if count2 == 0:
+            print(f"No packets of {self.TARGET_PACKET_LENGTH} bytes found in file 2")
+            return
+
+        # 提取第三个文件的数据包
+        print(f"\n[FILE 3: {self.pcap_file3}]")
+        count3 = self.extract_packets(self.pcap_file3, self.packets_data3)
+        if count3 == 0:
+            print(f"No packets of {self.TARGET_PACKET_LENGTH} bytes found in file 3")
+            return
+
+        # 解析三个文件的寄存器数据
+        print("Parsing register data from all three files...\n")
+        self.parse_register_data(self.packets_data, self.register_values)
+        self.parse_register_data(self.packets_data2, self.register_values2)
+        self.parse_register_data(self.packets_data3, self.register_values3)
+
+        # 对比三个文件的寄存器数据
+        self.compare_three_files()
+
+        # 导出到Excel
+        base_name1 = os.path.splitext(os.path.basename(self.pcap_file1))[0]
+        base_name2 = os.path.splitext(os.path.basename(self.pcap_file2))[0]
+        base_name3 = os.path.splitext(os.path.basename(self.pcap_file3))[0]
+        excel_file = f"{base_name1}_vs_{base_name2}_vs_{base_name3}_comparison.xlsx"
+        self.export_to_excel_three_way_comparison(excel_file)
+
 
 def main():
     """主函数"""
@@ -485,7 +701,7 @@ def main():
 
     # 检查命令行参数
     if len(sys.argv) < 2:
-        print("\nUsage: python iguana_analyzer.py <PCAP_file_path> [PCAP_file_path_2]")
+        print("\nUsage: python iguana_analyzer.py <PCAP_file_path> [PCAP_file_path_2] [PCAP_file_path_3]")
         print("\nExamples:")
         print("  Single file analysis:")
         print("    python iguana_analyzer.py test_tool.pcap")
@@ -493,12 +709,20 @@ def main():
         print("\n  Dual file comparison:")
         print("    python iguana_analyzer.py file1.pcap file2.pcap")
         print("    python iguana_analyzer.py before.pcap after.pcap")
+        print("\n  Three-way file comparison:")
+        print("    python iguana_analyzer.py file1.pcap file2.pcap file3.pcap")
+        print("    python iguana_analyzer.py test1.pcap test2.pcap test3.pcap")
         sys.exit(1)
 
     pcap_file1 = sys.argv[1]
     pcap_file2 = sys.argv[2] if len(sys.argv) >= 3 else None
+    pcap_file3 = sys.argv[3] if len(sys.argv) >= 4 else None
 
-    if pcap_file2:
+    if pcap_file3:
+        # 三文件对比模式
+        analyzer = IguanaRegisterAnalyzer(pcap_file1, pcap_file2, pcap_file3)
+        analyzer.run_three_way_comparison()
+    elif pcap_file2:
         # 双文件对比模式
         analyzer = IguanaRegisterAnalyzer(pcap_file1, pcap_file2)
         analyzer.run_comparison()
